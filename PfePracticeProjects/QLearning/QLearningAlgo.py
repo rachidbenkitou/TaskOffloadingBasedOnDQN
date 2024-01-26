@@ -51,6 +51,7 @@ environment_columns = 11
 # each state (see next cell for a description of possible actions).
 # The value of each (state, action) pair is initialized to 0.
 q_values = np.zeros((environment_rows, environment_columns, 4))
+print(q_values)
 
 """
 Actions
@@ -257,5 +258,3 @@ Run the code cell below to see an example:
 path = get_shortest_path(5, 2) #go to row 5, column 2
 path.reverse()
 print(path)
-
-print(q_values)
