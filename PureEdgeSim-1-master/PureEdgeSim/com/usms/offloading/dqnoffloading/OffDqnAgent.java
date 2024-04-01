@@ -1,6 +1,5 @@
 package com.usms.offloading.dqnoffloading;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
@@ -12,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Data
 @AllArgsConstructor
@@ -143,25 +143,33 @@ public class OffDqnAgent {
         headers.setContentType(MediaType.APPLICATION_JSON);
         ObjectMapper mapper = new ObjectMapper();
 
-        // Attempt to serialize the trainingBatch to JSON
-        String json;
+        // Transform currentState and nextState from OffState objects to arrays
+        List<Map<String, Object>> transformedBatch = trainingBatch.stream().map(exp -> {
+            Map<String, Object> expMap = new HashMap<>();
+            expMap.put("currentState", exp.getCurrentState().toArray());
+            expMap.put("nextState", exp.getNextState().toArray());
+            expMap.put("action", exp.getAction());
+            expMap.put("reward", exp.getReward());
+            expMap.put("terminalState", exp.isDone());
+            return expMap;
+        }).collect(Collectors.toList());
+
         try {
-            json = mapper.writeValueAsString(trainingBatch);
-        } catch (JsonProcessingException e) {
+            String json = mapper.writeValueAsString(transformedBatch);
+            HttpEntity<String> entity = new HttpEntity<>(json, headers);
+
+            // Using restTemplate to send a POST request
+            RestTemplate restTemplate = new RestTemplate();
+            String response = restTemplate.postForObject(pythonServiceUrl + "/train_network", entity, String.class);
+
+            // Optional: Do something with the response
+            System.out.println("Response from server: " + response);
+        } catch (Exception e) {
             e.printStackTrace();
-            return; // Or handle the error appropriately
+            // Handle error scenario
         }
-
-        HttpEntity<String> entity = new HttpEntity<>(json, headers);
-        String trainNetworkUrl = "http://127.0.0.1:5000/train_network";
-
-        // Using restTemplate to send a POST request
-        RestTemplate restTemplate = new RestTemplate();
-        String response = restTemplate.postForObject(trainNetworkUrl, entity, String.class);
-
-        // Optional: Do something with the response
-        System.out.println("Response from server: " + response);
     }
+
     public void trainNetwork() {
         if (this.replayBuffer.size() > this.batchReplayBufferSize) {
             ArrayList<OffExperienceReplay> randomSampleBatch = new ArrayList<>(batchReplayBufferSize);
