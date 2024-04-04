@@ -47,10 +47,10 @@ public class OffDqnAgent {
         this.restTemplate = new RestTemplate();
 
         // TODO Send API TO PYTHON TO INITIALISE MAIN_NETWORK AND TARGET_NETWORK AND COPY MAIN WEIGHTS IN TARGET NETWORK
-        initializeNetworksInPython();
+        //initializeNetworksInPython();
     }
 
-    private void initializeNetworksInPython() {
+    public void initializeNetworksInPython() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<String> entity = new HttpEntity<>("{}", headers); // Assuming no body is required for initialization
