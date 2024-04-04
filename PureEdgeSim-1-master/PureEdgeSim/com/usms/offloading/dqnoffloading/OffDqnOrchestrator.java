@@ -6,6 +6,7 @@ import com.mechalikh.pureedgesim.SimulationManager.SimLog;
 import com.mechalikh.pureedgesim.SimulationManager.SimulationManager;
 import com.mechalikh.pureedgesim.TasksGenerator.Task;
 import com.mechalikh.pureedgesim.TasksOrchestration.Orchestrator;
+import com.mechalikh.pureedgesim.TasksOrchestration.VmTaskMapItem;
 import org.cloudbus.cloudsim.vms.Vm;
 
 import java.util.ArrayList;
@@ -102,6 +103,70 @@ public class OffDqnOrchestrator extends Orchestrator {
         return -1;
     }
 
+    private OffState buildState(Task task, long defaultVmId) {
+        double taskDataSize = task.getLength();
+        double taskComputationRequirement = task.getContainerSize();
+        double maximumToleranceDelay = task.getMaxLatency();
+        DataCenter device = task.getEdgeDevice();
+        int mdWaitingQueueState = calculateMdWaitingQueueState(device);
+        double edgeServerLoad = calculateEdgeServerLoad(device.getId());
+        DataCenter orchestrator = findDataCenterById(defaultVmId);
+        double bandwidthInformation = getBandwidthInformation(device, orchestrator);
+        return new OffState(taskDataSize, taskComputationRequirement, maximumToleranceDelay,
+                mdWaitingQueueState, (int) edgeServerLoad, bandwidthInformation);
+    }
+
+    private int calculateMdWaitingQueueState(DataCenter device) {
+        int tasksCount = 0;
+        for (VmTaskMapItem mapItem : device.getVmTaskMap()) {
+            Vm vm = mapItem.getVm();
+            if (device.getVmList().contains(vm)) {
+                tasksCount++;
+            }
+        }
+        return tasksCount;
+    }
+
+    private double calculateEdgeServerLoad(long dataCenterId) {
+        DataCenter edgeServer = findDataCenterById(dataCenterId);
+        if (edgeServer == null) {
+            return 0.0;
+        }
+        double totalMipsCapacity = edgeServer.getVmList().stream().mapToDouble(Vm::getMips).sum();
+        double allocatedMipsForTasks = 0.0;
+        for (VmTaskMapItem mapItem : edgeServer.getVmTaskMap()) {
+            Vm vm = mapItem.getVm();
+            if (edgeServer.getVmList().contains(vm)) {
+                allocatedMipsForTasks += vm.getMips();
+            }
+        }
+        double cpuUtilization = (totalMipsCapacity > 0) ? (allocatedMipsForTasks / totalMipsCapacity) : 0.0;
+        return cpuUtilization * 100;
+    }
+
+    private DataCenter findDataCenterById(long id) {
+        for (DataCenter dc : simulationManager.getServersManager().getDatacenterList()) {
+            if (dc.getId() == id) {
+                return dc;
+            }
+        }
+        return null;
+    }
+
+    private double getBandwidthInformation(DataCenter device, DataCenter orchestrator) {
+        double distance = device.getMobilityManager().distanceTo(orchestrator);
+        double bandwidth;
+        if (distance <= 100) {
+            bandwidth = 100;
+        } else if (distance <= 1000) {
+            bandwidth = 50;
+        } else {
+            bandwidth = 10;
+        }
+        return bandwidth;
+    }
+
+
     private int dqnTaskOffloadingTraining(String[] architecture, Task task) {
         //set the current state and next initial state
         int defaultVmId = pickRandom(vmList);
@@ -113,6 +178,7 @@ public class OffDqnOrchestrator extends Orchestrator {
 
     private int dqnTaskOffloadingEvaluation(String[] architecture, Task task) {
         return 0;
+
     }
 
     int pickRandom(List<Vm> vms) {
