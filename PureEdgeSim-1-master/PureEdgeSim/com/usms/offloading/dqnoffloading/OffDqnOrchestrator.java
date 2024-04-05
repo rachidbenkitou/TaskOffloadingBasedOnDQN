@@ -4,6 +4,7 @@ import com.mechalikh.pureedgesim.DataCentersManager.DataCenter;
 import com.mechalikh.pureedgesim.ScenarioManager.SimulationParameters;
 import com.mechalikh.pureedgesim.SimulationManager.SimLog;
 import com.mechalikh.pureedgesim.SimulationManager.SimulationManager;
+import com.mechalikh.pureedgesim.TasksGenerator.Application;
 import com.mechalikh.pureedgesim.TasksGenerator.Task;
 import com.mechalikh.pureedgesim.TasksOrchestration.Orchestrator;
 import com.mechalikh.pureedgesim.TasksOrchestration.VmTaskMapItem;
@@ -12,6 +13,7 @@ import org.cloudbus.cloudsim.vms.Vm;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 public class OffDqnOrchestrator extends Orchestrator {
     private static OffDqnAgent agent;
@@ -169,11 +171,86 @@ public class OffDqnOrchestrator extends Orchestrator {
 
     private int dqnTaskOffloadingTraining(String[] architecture, Task task) {
         //set the current state and next initial state
-        int defaultVmId = pickRandom(vmList);
-        if (task.getEdgeDevice().getVmList() != null && !task.getEdgeDevice().getVmList().isEmpty()) {
-            defaultVmId = (int) task.getEdgeDevice().getVmList().get(0).getId();
+        int defaultVmId = getDefaultVmIdForTask(task);
+
+        theCurrentState = buildState(task, defaultVmId);
+        int app = task.getApplicationID();
+        int R = tasks.size();
+        Application app1 = SimulationParameters.APPLICATIONS_LIST.get(app);
+        int to = app1.getRate();
+        double dij = SimulationParameters.AREA_LENGTH / 2;
+
+
+        List<Vm> vmEdgeServerList = vmList.stream()
+                .filter(vm -> ((DataCenter) vm.getHost().getDatacenter()).getType() == SimulationParameters.TYPES.EDGE_DATACENTER)
+                .collect(Collectors.toList());
+
+        List<Vm> vmDevices = vmList.stream()
+                .filter(vm -> ((DataCenter) vm.getHost().getDatacenter()).getType() == SimulationParameters.TYPES.EDGE_DEVICE)
+                .collect(Collectors.toList());
+
+        List<Vm> vmsCloud = datacenters.stream()
+                .filter(dc -> dc.getType() == SimulationParameters.TYPES.CLOUD)
+                .flatMap(dc -> dc.getVmList().stream())
+                .collect(Collectors.toList());
+
+
+        // here we loop through the episodes
+        for (int indexEpisode = 0; indexEpisode < agent.getNumberEpisodes(); indexEpisode++) {
+
+            // list that stores rewards per episode - this is necessary for keeping track of convergence
+            List<Double> rewardsEpisode = new ArrayList<>();
+
+            System.out.println("Simulating episode " + indexEpisode);
+
+            boolean terminalState = false;
+
+            for (Task t : tasks) {
+                if (t != task) {
+
+                    int appT = t.getApplicationID();
+                    int selectedVmId;
+                    if (t.getEdgeDevice().getVmList() != null && !t.getEdgeDevice().getVmList().isEmpty())
+                        selectedVmId = (int) t.getEdgeDevice().getVmList().get(0).getId();
+                    else selectedVmId = pickRandom(vmDevices);
+
+                    OffState nextState = buildState(t, selectedVmId);
+                    OffState currentState = theCurrentState;
+
+                    int action = agent.chooseAction(currentState, indexEpisode);
+
+                    OffRewardUtil reward = new OffRewardUtil(currentState, action);
+                    double updatedCpuRate = 0.0;
+
+                    // Make them dynamic in Orchestration
+//                    OffState nextState = new OffState();
+//                    double reward = 12;
+                    terminalState = true;
+
+                    // Add current state, action, reward, next state, and terminal flag to the replay buffer
+                    //agent.getReplayBuffer().addLast(new OffExperienceReplay(currentState, action, reward, nextState, terminalState));
+
+                    // Train network
+                    agent.trainNetwork();
+
+                    // Set the current state for the next step
+                    currentState = nextState;
+                }
+            }
+
         }
+
         return 0;
+    }
+
+    private int getDefaultVmIdForTask(Task task) {
+        // If the task's edge device has associated VMs, pick the first one as the default
+        if (task.getEdgeDevice().getVmList() != null && !task.getEdgeDevice().getVmList().isEmpty()) {
+            return (int) task.getEdgeDevice().getVmList().get(0).getId();
+        } else {
+            // If no specific VMs are associated, select a VM randomly from all available VMs
+            return pickRandom(vmList);
+        }
     }
 
     private int dqnTaskOffloadingEvaluation(String[] architecture, Task task) {

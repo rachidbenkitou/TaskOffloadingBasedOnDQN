@@ -102,41 +102,41 @@ public class OffDqnAgent {
         }
     }
 
-    public void trainingEpisodes() {
-
-        // here we loop through the episodes
-        for (int indexEpisode = 0; indexEpisode < numberEpisodes; indexEpisode++) {
-
-            // list that stores rewards per episode - this is necessary for keeping track of convergence
-            List<Double> rewardsEpisode = new ArrayList<>();
-
-            System.out.println("Simulating episode " + indexEpisode);
-
-            OffState currentState = OffState.reset();
-
-            boolean terminalState = false;
-
-            while (!terminalState) {
-
-                int action = chooseAction(currentState, indexEpisode);
-
-                // Make them dynamic in Orchestration
-                OffState nextState = new OffState();
-                double reward = 12;
-                terminalState = true;
-
-                // Add current state, action, reward, next state, and terminal flag to the replay buffer
-                replayBuffer.addLast(new OffExperienceReplay(currentState, action, reward, nextState, terminalState));
-
-                // Train network
-                trainNetwork();
-
-                // Set the current state for the next step
-                currentState = nextState;
-            }
-
-        }
-    }
+//    public void trainingEpisodes() {
+//
+//        // here we loop through the episodes
+//        for (int indexEpisode = 0; indexEpisode < numberEpisodes; indexEpisode++) {
+//
+//            // list that stores rewards per episode - this is necessary for keeping track of convergence
+//            List<Double> rewardsEpisode = new ArrayList<>();
+//
+//            System.out.println("Simulating episode " + indexEpisode);
+//
+//            OffState currentState = OffState.reset();
+//
+//            boolean terminalState = false;
+//
+//            while (!terminalState) {
+//
+//                int action = chooseAction(currentState, indexEpisode);
+//
+//                // Make them dynamic in Orchestration
+//                OffState nextState = new OffState();
+//                double reward = 12;
+//                terminalState = true;
+//
+//                // Add current state, action, reward, next state, and terminal flag to the replay buffer
+//                replayBuffer.addLast(new OffExperienceReplay(currentState, action, reward, nextState, terminalState));
+//
+//                // Train network
+//                trainNetwork();
+//
+//                // Set the current state for the next step
+//                currentState = nextState;
+//            }
+//
+//        }
+//    }
 
     private void sendTrainingBatchToPython(ArrayList<OffExperienceReplay> trainingBatch) {
         HttpHeaders headers = new HttpHeaders();
