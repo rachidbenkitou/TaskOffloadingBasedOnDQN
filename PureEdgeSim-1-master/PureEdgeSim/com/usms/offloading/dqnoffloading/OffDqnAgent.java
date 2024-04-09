@@ -77,6 +77,10 @@ public class OffDqnAgent {
         }
     }
 
+    public int chooseBestAction(OffState state) {
+        return postChooseBestAction(state.toArray());
+    }
+
     private int postChooseBestAction(double[] stateArray) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
