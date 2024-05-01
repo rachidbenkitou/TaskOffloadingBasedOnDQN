@@ -240,11 +240,11 @@ public class OffDqnOrchestrator extends Orchestrator {
                     }
 
                     // Compute reward
-                    OffRewardUtil reward = new OffRewardUtil(currentState, action);
+//                    OffRewardUtil reward = new OffRewardUtil(currentState, action);
                     // TODO
                     //  double computedReward = reward.calculateReward(w1, w2, w3, task.getContainerSize(), dij, to, R, this.edgeAvailableStorage, task.getTime(), this.edgeStorage);
 
-                    double computedReward = 0;
+                    double computedReward = 0.5;
 
                     // Additional code snippet
                     System.out.println("computed reward " + computedReward);

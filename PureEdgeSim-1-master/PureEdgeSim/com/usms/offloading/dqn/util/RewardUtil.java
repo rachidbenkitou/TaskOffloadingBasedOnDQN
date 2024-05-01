@@ -111,7 +111,5 @@ public class RewardUtil {
                 (powerTransmission * s.getRequestSize() / dataRate(BwEdgeCloud, dij)) +
                 switchedCapacitance * s.getLength() * Math.pow(s.getRemoteComputationRate(), 2)
         );
-
-
     }
 }
