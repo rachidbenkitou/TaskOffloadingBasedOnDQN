@@ -8,21 +8,27 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class OffState {
-    private double taskDataSize;
-    private double taskComputationRequirement;
-    private double maximumToleranceDelay;
-    private int mdWaitingQueueState;
-    private double edgeServerLoad;
-    private double bandwidthInformation;
-
-
-    public static OffState reset() {
-        OffState offState = new OffState();
-        return offState;
-    }
+    private double length;
+    private double maxLatency;
+    private double requestSize;
+    private double localComputationRate;
+    private double edgeComputationRate;
+    private double remoteComputationRate;
+    private long edgeAvailableStorage;
+    private int vmId;
 
     public double[] toArray() {
-        return new double[]{taskDataSize, taskComputationRequirement, maximumToleranceDelay,
-                mdWaitingQueueState, edgeServerLoad, bandwidthInformation};
+
+        double[] arr = new double[8];
+        arr[0] = length;
+        arr[1] = maxLatency;
+        arr[2] = requestSize;
+        arr[3] = this.localComputationRate;
+        arr[4] = this.edgeComputationRate;
+        arr[5] = this.remoteComputationRate;
+        arr[6] = this.edgeAvailableStorage * 1.0;
+        arr[7] = (double) this.vmId;
+        return arr;
     }
+
 }

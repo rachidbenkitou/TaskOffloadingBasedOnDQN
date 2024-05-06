@@ -13,7 +13,7 @@ def initialize():
     # Assuming the initialization just involves setting up the networks which is done in the constructor.
     # If any other setup is needed, it should be added here.
     global agent
-    agent = DeepQLearningAgent(state_size=6, action_size=2)  # Re-instantiate to reset
+    agent = DeepQLearningAgent(state_size=8, action_size=2)  # Re-instantiate to reset
     return jsonify({'message': 'Networks initialized'}), 200
 
 

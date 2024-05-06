@@ -4,10 +4,8 @@ import com.mechalikh.pureedgesim.DataCentersManager.DataCenter;
 import com.mechalikh.pureedgesim.ScenarioManager.SimulationParameters;
 import com.mechalikh.pureedgesim.SimulationManager.SimLog;
 import com.mechalikh.pureedgesim.SimulationManager.SimulationManager;
-import com.mechalikh.pureedgesim.TasksGenerator.Application;
 import com.mechalikh.pureedgesim.TasksGenerator.Task;
 import com.mechalikh.pureedgesim.TasksOrchestration.Orchestrator;
-import com.mechalikh.pureedgesim.TasksOrchestration.VmTaskMapItem;
 import org.cloudbus.cloudsim.vms.Vm;
 
 import java.util.*;
@@ -30,8 +28,13 @@ public class OffDqnOrchestrator extends Orchestrator {
     double edgeComputationRate = 0.0;
     double remoteComputationRate = 0.0;
 
+    protected Map<Integer, OffStateAction> historyMap = new LinkedHashMap<>();
+    double updatedCpuRate = 0.0;
+
+
     public OffDqnOrchestrator(SimulationManager simulationManager) {
         super(simulationManager);
+        agent = new OffDqnAgent(0.1, 0.1, 500);
         agent.initializeNetworksInPython();
         tasks = simulationManager.getTasksList();
         datacenters = simulationManager.getServersManager().getDatacenterList();
@@ -86,6 +89,9 @@ public class OffDqnOrchestrator extends Orchestrator {
     protected int findVM(String[] architecture, Task task) {
         if ("DQN_OFFLOAD_TRAINING".equals(algorithm)) {
             return dqnTaskOffloadingTraining(architecture, task);
+        }
+        if ("DQN_OFFLOAD_LEARN".equals(algorithm)) {
+            return learn();
         } else if ("DQN_OFFLOAD_EVALUATION".equals(algorithm)) {
             return dqnTaskOffloadingEvaluation(architecture, task);
         } else if ("TRADE_OFF".equals(algorithm)) {
@@ -104,81 +110,27 @@ public class OffDqnOrchestrator extends Orchestrator {
     }
 
     private OffState buildState(Task task, long defaultVmId) {
-        double taskDataSize = task.getLength();
-        double taskComputationRequirement = task.getContainerSize();
-        double maximumToleranceDelay = task.getMaxLatency();
-        DataCenter device = task.getEdgeDevice();
-        int mdWaitingQueueState = calculateMdWaitingQueueState(device);
-        double edgeServerLoad = calculateEdgeServerLoad(device.getId());
-        DataCenter orchestrator = findDataCenterById(defaultVmId);
-        double bandwidthInformation = getBandwidthInformation(device, orchestrator);
-        return new OffState(taskDataSize, taskComputationRequirement, maximumToleranceDelay,
-                mdWaitingQueueState, (int) edgeServerLoad, bandwidthInformation);
+        long taskLength = task.getLength();
+        double permittedDelay = task.getMaxLatency();
+        int app = task.getApplicationID();
+        long requestSize = SimulationParameters.APPLICATIONS_LIST.get(app).getRequestSize();
+        double localComputationRate = task.getEdgeDevice().getHost(0).getTotalMipsCapacity();
+        System.out.println("State : " + "[LR: " + localComputationRate + " ER: " + edgeComputationRate + " RT: " + remoteComputationRate + " AS: " + edgeAvailableStorage + " DVm: " + defaultVmId + "]");
+        return new OffState(taskLength, permittedDelay, requestSize, localComputationRate, edgeComputationRate, remoteComputationRate, edgeAvailableStorage, (int) defaultVmId);
     }
 
-    private int calculateMdWaitingQueueState(DataCenter device) {
-        int tasksCount = 0;
-        for (VmTaskMapItem mapItem : device.getVmTaskMap()) {
-            Vm vm = mapItem.getVm();
-            if (device.getVmList().contains(vm)) {
-                tasksCount++;
-            }
-        }
-        return tasksCount;
-    }
 
-    private double calculateEdgeServerLoad(long dataCenterId) {
-        DataCenter edgeServer = findDataCenterById(dataCenterId);
-        if (edgeServer == null) {
-            return 0.0;
-        }
-        double totalMipsCapacity = edgeServer.getVmList().stream().mapToDouble(Vm::getMips).sum();
-        double allocatedMipsForTasks = 0.0;
-        for (VmTaskMapItem mapItem : edgeServer.getVmTaskMap()) {
-            Vm vm = mapItem.getVm();
-            if (edgeServer.getVmList().contains(vm)) {
-                allocatedMipsForTasks += vm.getMips();
-            }
-        }
-        double cpuUtilization = (totalMipsCapacity > 0) ? (allocatedMipsForTasks / totalMipsCapacity) : 0.0;
-        return cpuUtilization * 100;
-    }
-
-    private DataCenter findDataCenterById(long id) {
-        for (DataCenter dc : simulationManager.getServersManager().getDatacenterList()) {
-            if (dc.getId() == id) {
-                return dc;
-            }
-        }
-        return null;
-    }
-
-    private double getBandwidthInformation(DataCenter device, DataCenter orchestrator) {
-        double distance = device.getMobilityManager().distanceTo(orchestrator);
-        double bandwidth;
-        if (distance <= 100) {
-            bandwidth = 100;
-        } else if (distance <= 1000) {
-            bandwidth = 50;
-        } else {
-            bandwidth = 10;
-        }
-        return bandwidth;
-    }
-
+    int taskIndex = 1;
 
     private int dqnTaskOffloadingTraining(String[] architecture, Task task) {
-        //set the current state and next initial state
-        int defaultVmId = getDefaultVmIdForTask(task);
+// The framework is its own loop for each task, so there is no need for us to iterate for tasks
+        System.out.println("****************************");
+        System.out.println("****************************");
+        System.out.println(" **************Task Number: " + taskIndex);
+        System.out.println("****************************");
+        System.out.println("****************************");
 
-        theCurrentState = buildState(task, defaultVmId);
-        int app = task.getApplicationID();
-        int R = tasks.size();
-        Application app1 = SimulationParameters.APPLICATIONS_LIST.get(app);
-        int to = app1.getRate();
-        double dij = SimulationParameters.AREA_LENGTH / 2;
-        Map<OffStateAction, Integer> stateVmMap = new HashMap<>();
-
+//        Isolate End Devices, Edge Servers and Cloud Servers
 
         List<Vm> vmEdgeServerList = vmList.stream()
                 .filter(vm -> ((DataCenter) vm.getHost().getDatacenter()).getType() == SimulationParameters.TYPES.EDGE_DATACENTER)
@@ -193,100 +145,141 @@ public class OffDqnOrchestrator extends Orchestrator {
                 .flatMap(dc -> dc.getVmList().stream())
                 .collect(Collectors.toList());
 
+        int deviceGeneratedTheTask = pickRandom(vmDevices);
 
-        // here we loop through the episodes
-        for (int indexEpisode = 0; indexEpisode < agent.getNumberEpisodes(); indexEpisode++) {
-
-            // list that stores rewards per episode - this is necessary for keeping track of convergence
-            List<Double> rewardsEpisode = new ArrayList<>();
-
-            System.out.println("Simulating episode " + indexEpisode);
-
-            boolean terminalState = false;
-
-            for (Task t : tasks) {
-                if (t != task) {
-
-                    int appT = t.getApplicationID();
-                    int selectedVmId;
-                    if (t.getEdgeDevice().getVmList() != null && !t.getEdgeDevice().getVmList().isEmpty())
-                        selectedVmId = (int) t.getEdgeDevice().getVmList().get(0).getId();
-                    else selectedVmId = pickRandom(vmDevices);
-
-                    OffState nextState = buildState(t, selectedVmId);
-                    OffState currentState = theCurrentState;
-
-                    int action = agent.chooseAction(currentState, indexEpisode);
-                    double updatedCpuRate = 0.0;
-
-                    switch (action) {
-                        case 0: // Local computation
-                            selectedVmId = pickRandom(vmDevices);
-                            Vm selectedVmLocal = vmList.get(selectedVmId);
-                            // Compute updated CPU rate for local computation
-                            updatedCpuRate = selectedVmLocal.getCpuPercentUtilization() + (task.getLength() / selectedVmLocal.getTotalMipsCapacity());
-                            updatedCpuRate *= selectedVmLocal.getTotalMipsCapacity();
-                            // Compute distance for local computation
-                            if (((DataCenter) selectedVmLocal.getHost().getDatacenter()).getType() == SimulationParameters.TYPES.EDGE_DATACENTER)
-                                dij = task.getEdgeDevice().getMobilityManager().distanceTo((DataCenter) selectedVmLocal.getHost().getDatacenter());
-                            break;
-                        case 1: // Offload computation
-                            selectedVmId = pickRandom(vmEdgeServerList);
-                            Vm selectedVmEdge = vmList.get(selectedVmId);
-                            // Compute distance for offload computation
-                            if (((DataCenter) selectedVmEdge.getHost().getDatacenter()).getType() == SimulationParameters.TYPES.EDGE_DATACENTER)
-                                dij = task.getEdgeDevice().getMobilityManager().distanceTo((DataCenter) selectedVmEdge.getHost().getDatacenter());
-                            break;
-                    }
-
-                    // Compute reward
-//                    OffRewardUtil reward = new OffRewardUtil(currentState, action);
-                    // TODO
-                    //  double computedReward = reward.calculateReward(w1, w2, w3, task.getContainerSize(), dij, to, R, this.edgeAvailableStorage, task.getTime(), this.edgeStorage);
-
-                    double computedReward = 0.5;
-
-                    // Additional code snippet
-                    System.out.println("computed reward " + computedReward);
-                    System.out.println("Next state");
-                    nextState = buildState(t, selectedVmId);
-                    // Compute the total reward Gt
-                    totalReward += computedReward;
-                    System.out.println("Total rewards : " + totalReward);
-
-                    // Add current state, action, reward, next state, and terminal flag to the replay buffer
-                    agent.getReplayBuffer().addLast(new OffExperienceReplay(currentState, action, computedReward, nextState, true));
-
-                    // Train network
-                    agent.trainNetwork();
-
-                    //associer action-pair qvalue a une vm
-                    stateVmMap.put(new OffStateAction(currentState, action), selectedVmId);
-
-                    // Set the current state for the next step
-                    currentState = nextState;
-                }
+        for (Vm vm : task.getEdgeDevice().getVmList()) {
+            if (vm != null) {
+                // Found the first non-null and non-empty value
+                deviceGeneratedTheTask = (int) vm.getId();
+                break; // Exit the loop after finding the first value
             }
-
         }
 
+        // We get the current state of our environment
+        theCurrentState = buildState(task, deviceGeneratedTheTask);
+        // Choose action
+        // This function returns two values 0 or 1. 0 means task will be executed locally, and 1 means that the task will be offloaded.
+        int action = agent.chooseAction(theCurrentState, taskIndex);
+        OffAction offAction = null;
+        if (action == 0) {
+            offAction = OffAction.LOCAL_EXECUTION;
+        } else if (action == 1) {
+            offAction = OffAction.OFFLOAD_TO_EDGE;
+        }
+
+        assert offAction != null;
+        System.out.println("Chosen action: " + offAction.name());
+
+        switch (offAction.name()) {
+            case "LOCAL_EXECUTION":
+                computedReward = executeLocalAlgorithm(deviceGeneratedTheTask, task, offAction);
+                break;
+            default:
+                computedReward = executeLocalAlgorithm(deviceGeneratedTheTask, task, offAction);
+                break;
+        }
+
+        totalReward += computedReward;
+
+//
+//
+//        // here we loop through the episodes
+//        for (int indexEpisode = 0; indexEpisode < agent.getNumberEpisodes(); indexEpisode++) {
+//
+//            // list that stores rewards per episode - this is necessary for keeping track of convergence
+//            List<Double> rewardsEpisode = new ArrayList<>();
+//
+//            System.out.println("Simulating episode " + indexEpisode);
+//
+//            boolean terminalState = false;
+//
+//            for (Task t : tasks) {
+//                if (t != task) {
+//
+//                    int appT = t.getApplicationID();
+//                    int selectedVmId;
+//                    if (t.getEdgeDevice().getVmList() != null && !t.getEdgeDevice().getVmList().isEmpty())
+//                        selectedVmId = (int) t.getEdgeDevice().getVmList().get(0).getId();
+//                    else selectedVmId = pickRandom(vmDevices);
+//
+//                    OffState nextState = buildState(t, selectedVmId);
+//                    OffState currentState = theCurrentState;
+//
+//                    int action = agent.chooseAction(currentState, indexEpisode);
+//                    double updatedCpuRate = 0.0;
+//
+//                    switch (action) {
+//                        case 0: // Local computation
+//                            selectedVmId = pickRandom(vmDevices);
+//                            Vm selectedVmLocal = vmList.get(selectedVmId);
+//                            // Compute updated CPU rate for local computation
+//                            updatedCpuRate = selectedVmLocal.getCpuPercentUtilization() + (task.getLength() / selectedVmLocal.getTotalMipsCapacity());
+//                            updatedCpuRate *= selectedVmLocal.getTotalMipsCapacity();
+//                            // Compute distance for local computation
+//                            if (((DataCenter) selectedVmLocal.getHost().getDatacenter()).getType() == SimulationParameters.TYPES.EDGE_DATACENTER)
+//                                dij = task.getEdgeDevice().getMobilityManager().distanceTo((DataCenter) selectedVmLocal.getHost().getDatacenter());
+//                            break;
+//                        case 1: // Offload computation
+//                            selectedVmId = pickRandom(vmEdgeServerList);
+//                            Vm selectedVmEdge = vmList.get(selectedVmId);
+//                            // Compute distance for offload computation
+//                            if (((DataCenter) selectedVmEdge.getHost().getDatacenter()).getType() == SimulationParameters.TYPES.EDGE_DATACENTER)
+//                                dij = task.getEdgeDevice().getMobilityManager().distanceTo((DataCenter) selectedVmEdge.getHost().getDatacenter());
+//                            break;
+//                    }
+//
+//                    // Compute reward
+////                    OffRewardUtil reward = new OffRewardUtil(currentState, action);
+//                    // TODO
+//                    //  double computedReward = reward.calculateReward(w1, w2, w3, task.getContainerSize(), dij, to, R, this.edgeAvailableStorage, task.getTime(), this.edgeStorage);
+//
+//                    double computedReward = 0.5;
+//
+//                    // Additional code snippet
+//                    System.out.println("computed reward " + computedReward);
+//                    System.out.println("Next state");
+//                    nextState = buildState(t, selectedVmId);
+//                    // Compute the total reward Gt
+//                    totalReward += computedReward;
+//                    System.out.println("Total rewards : " + totalReward);
+//
+//                    // Add current state, action, reward, next state, and terminal flag to the replay buffer
+//                    agent.getReplayBuffer().addLast(new OffExperienceReplay(currentState, action, computedReward, nextState, true));
+//
+//                    //associer action-pair qvalue a une vm
+//                    stateVmMap.put(new OffStateAction(currentState, action), selectedVmId);
+//
+//                    // Set the current state for the next step
+//                    currentState = nextState;
+//                }
+//            }
+//
+//        }
+//
+//        // Train network
+//        agent.trainNetwork();
+//
+//        int bestAction = agent.chooseBestAction(theCurrentState);
+//        int vmId = stateVmMap.get(new OffStateAction(theCurrentState, bestAction));
+//        System.out.println("Task : " + task.getId() + " --> Vm: " + vmId);
+//
+//        //update available storage
+//        this.edgeAvailableStorage = this.edgeStorage;
+//        return vmId;
+
+        taskIndex++;
+        return 1;
+    }
+
+    private int learn() {
+        agent.trainNetwork();
         int bestAction = agent.chooseBestAction(theCurrentState);
-        int vmId = stateVmMap.get(new OffStateAction(theCurrentState, bestAction));
-        System.out.println("Task : " + task.getId() + " --> Vm: " + vmId);
-        
-        //update available storage
-        this.edgeAvailableStorage = this.edgeStorage;
-        return vmId;
+
+        return -1;
     }
 
     private int getDefaultVmIdForTask(Task task) {
-        // If the task's edge device has associated VMs, pick the first one as the default
-        if (task.getEdgeDevice().getVmList() != null && !task.getEdgeDevice().getVmList().isEmpty()) {
-            return (int) task.getEdgeDevice().getVmList().get(0).getId();
-        } else {
-            // If no specific VMs are associated, select a VM randomly from all available VMs
-            return pickRandom(vmList);
-        }
+        return (int) task.getEdgeDevice().getVmList().get(0).getId();
     }
 
     private int dqnTaskOffloadingEvaluation(String[] architecture, Task task) {
@@ -370,5 +363,17 @@ public class OffDqnOrchestrator extends Orchestrator {
     @Override
     public void resultsReturned(Task task) {
 
+    }
+
+    private double executeLocalAlgorithm(int deviceSelectedVm, Task task, OffAction action) {
+        Vm selectedVm = vmList.get(deviceSelectedVm);
+        double percent = selectedVm.getCpuPercentUtilization() + (task.getLength() / selectedVm.getTotalMipsCapacity());
+        updatedCpuRate = percent * selectedVm.getTotalMipsCapacity();
+        historyMap.put(deviceSelectedVm, new OffStateAction(theCurrentState, action));
+
+        return 0.5;
+    }
+
+    private void offloadedAlgorithm(int selectedVm) {
     }
 }

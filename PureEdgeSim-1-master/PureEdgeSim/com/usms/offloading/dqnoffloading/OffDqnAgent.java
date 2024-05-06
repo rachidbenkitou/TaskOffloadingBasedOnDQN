@@ -23,7 +23,7 @@ public class OffDqnAgent {
     private int times = 16;
     private double learningRate = 0.001;
 
-    private int stateDimension = 6;
+    private int stateDimension = 8;
     private int actionDimension = 2;
     private int replayBufferSize = 300;
     private int batchReplayBufferSize = 100;
@@ -63,9 +63,9 @@ public class OffDqnAgent {
     public int chooseAction(OffState state, int index) {
         Random random = new Random();
 
-        if (index > 200) {
-            this.epsilon = 0.999 * this.epsilon;
-        }
+//        if (index > 3000) {
+//            this.epsilon = 0.999 * this.epsilon;
+//        }
 
         double randomNumber = random.nextDouble();
 
@@ -78,7 +78,8 @@ public class OffDqnAgent {
     }
 
     public int chooseBestAction(OffState state) {
-        return postChooseBestAction(state.toArray());
+//        return postChooseBestAction(state.toArray());
+        return 0;
     }
 
     private int postChooseBestAction(double[] stateArray) {
@@ -183,7 +184,11 @@ public class OffDqnAgent {
                 randomSampleBatch.add(replayBufferList.get(i));
             }
             // TODO SEND SAMPLE BATCH TO PYTHON VIA API TO TRAIN THE NETWORK
-            sendTrainingBatchToPython(randomSampleBatch);
+//            sendTrainingBatchToPython(randomSampleBatch);
+
+            System.out.println(randomSampleBatch);
         }
+
+        System.out.println(this.replayBuffer);
     }
 }

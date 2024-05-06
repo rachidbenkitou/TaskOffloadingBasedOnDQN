@@ -58,7 +58,6 @@ class DeepQLearningAgent:
 
     def choose_best_action(self, state):
         state = np.array([state])
-        print(state)
         action_values = self.main_network.predict(state)
         best_action = np.argmax(action_values[0])
         return best_action

@@ -1,13 +1,19 @@
 package com.usms.offloading.dqnoffloading;
 
-import com.dqn.State;
-import com.usms.offloading.dqn.learning.Agent;
+import com.mechalikh.pureedgesim.MainApplication;
 
-public class OffMain {
+public class OffMain extends MainApplication {
+    private static String settingsPath = "PureEdgeSim/off_dqn_learning/settings/";
+
+    private static String outputPath = "PureEdgeSim/off_dqn_learning/outputs/";
+
+    public OffMain(int fromIteration, int step_) {
+        super(fromIteration, step_);
+    }
+
     public static void main(String[] args) {
-        OffDqnAgent offDqnAgent= new OffDqnAgent(0.01, 0.1, 10);
-//        System.out.println(offDqnAgent.chooseAction(new OffState(1,2,3,4,5,6),1222));
-        offDqnAgent.initializeNetworksInPython();
-        offDqnAgent.trainNetwork();
+        setCustomOutputFolder(outputPath);
+        setCustomSettingsFolder(settingsPath);
+        OffMain.launchSimulation();
     }
 }
