@@ -34,7 +34,7 @@ public class OffDqnAgent {
 
     private List<Double> sumRewardsEpisode = new ArrayList<>();
 
-    private Deque<OffExperienceReplay> replayBuffer = new ArrayDeque<>();
+    //private Deque<OffExperienceReplay> replayBuffer = new ArrayDeque<>();
     private List<Integer> actionsAppend = new ArrayList<>();
 
     private final RestTemplate restTemplate;
@@ -61,22 +61,30 @@ public class OffDqnAgent {
     }
 
     public int chooseAction(OffState state, int index) {
-        Random random = new Random();
+//        Random random = new Random();
 
-//        if (index > 3000) {
-//            this.epsilon = 0.999 * this.epsilon;
-//        }
+        if (index > 1000) {
+            this.epsilon = 0.999 * this.epsilon;
+        }
 
-        double randomNumber = random.nextDouble();
+//        double randomNumber = random.nextDouble();
 
-        if (randomNumber < this.epsilon) {
-            return random.nextInt(this.actionDimension);
+        if (chooseRandomlyDouble() > this.epsilon) {
+            return chooseRandomly();
         } else {
             // TODO This is where your API call or other logic to determine the best action will go
             return postChooseBestAction(state.toArray());
         }
     }
 
+    public  double chooseRandomlyDouble() {
+        Random random = new Random();
+        return random.nextDouble(); // Generates a random double between 0.0 (inclusive) and 1.0 (exclusive)
+    }
+    private   int chooseRandomly() {
+        Random random = new Random();
+        return random.nextInt(2); // Generates a random integer between 0 (inclusive) and 2 (exclusive)
+    }
     public int chooseBestAction(OffState state) {
 //        return postChooseBestAction(state.toArray());
         return 0;
@@ -175,8 +183,8 @@ public class OffDqnAgent {
         }
     }
 
-    public void trainNetwork() {
-        if (this.replayBuffer.size() > this.batchReplayBufferSize) {
+    public void trainNetwork(Deque<OffExperienceReplay> replayBuffer) {
+        if (replayBuffer.size() > this.batchReplayBufferSize) {
             ArrayList<OffExperienceReplay> randomSampleBatch = new ArrayList<>(batchReplayBufferSize);
             List<OffExperienceReplay> replayBufferList = new ArrayList<>(replayBuffer);
             Collections.shuffle(replayBufferList, new Random());
@@ -184,11 +192,7 @@ public class OffDqnAgent {
                 randomSampleBatch.add(replayBufferList.get(i));
             }
             // TODO SEND SAMPLE BATCH TO PYTHON VIA API TO TRAIN THE NETWORK
-//            sendTrainingBatchToPython(randomSampleBatch);
-
-            System.out.println(randomSampleBatch);
+           sendTrainingBatchToPython(randomSampleBatch);
         }
-
-        System.out.println(this.replayBuffer);
     }
 }

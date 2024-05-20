@@ -29,12 +29,14 @@ public class OffDqnOrchestrator extends Orchestrator {
     double remoteComputationRate = 0.0;
 
     protected Map<Integer, OffStateAction> historyMap = new LinkedHashMap<>();
+    private Deque<OffExperienceReplay> replayBuffer = new ArrayDeque<>();
+
     double updatedCpuRate = 0.0;
 
 
     public OffDqnOrchestrator(SimulationManager simulationManager) {
         super(simulationManager);
-        agent = new OffDqnAgent(0.1, 0.1, 500);
+        agent = new OffDqnAgent(0.1, 0.6, 20);
         agent.initializeNetworksInPython();
         tasks = simulationManager.getTasksList();
         datacenters = simulationManager.getServersManager().getDatacenterList();
@@ -91,7 +93,7 @@ public class OffDqnOrchestrator extends Orchestrator {
             return dqnTaskOffloadingTraining(architecture, task);
         }
         if ("DQN_OFFLOAD_LEARN".equals(algorithm)) {
-            return learn();
+            return learn(architecture, task);
         } else if ("DQN_OFFLOAD_EVALUATION".equals(algorithm)) {
             return dqnTaskOffloadingEvaluation(architecture, task);
         } else if ("TRADE_OFF".equals(algorithm)) {
@@ -120,6 +122,29 @@ public class OffDqnOrchestrator extends Orchestrator {
     }
 
 
+    private double executeLocalAlgorithm(int deviceSelectedVm, Task task, OffAction action) {
+        double dij = 0;
+        Vm selectedVm = vmList.get(deviceSelectedVm);
+        double percent = selectedVm.getCpuPercentUtilization() + (task.getLength() / selectedVm.getTotalMipsCapacity());
+        updatedCpuRate = percent * selectedVm.getTotalMipsCapacity();
+        historyMap.put(deviceSelectedVm, new OffStateAction(theCurrentState, action));
+        dij = task.getEdgeDevice().getMobilityManager().distanceTo((DataCenter) selectedVm.getHost().getDatacenter());
+        if (dij == 0) dij = SimulationParameters.AREA_LENGTH / 2;
+        return 0.5;
+    }
+
+    private double offloadedAlgorithm(int deviceSelectedVm, Task task, OffAction action) {
+        double dij = 0;
+        Vm selectedVm = vmList.get(deviceSelectedVm);
+        dij = task.getEdgeDevice().getMobilityManager().distanceTo((DataCenter) selectedVm.getHost().getDatacenter());
+        if (dij == 0) dij = SimulationParameters.AREA_LENGTH / 2;
+        updatedCpuRate = getComputationRate()[1];
+        edgeComputationRate = updatedCpuRate;
+        this.edgeAvailableStorage = this.edgeAvailableStorage - task.getContainerSize();
+        if (edgeAvailableStorage < 0) edgeAvailableStorage = 0;
+        return 0.7;
+    }
+
     int taskIndex = 1;
 
     private int dqnTaskOffloadingTraining(String[] architecture, Task task) {
@@ -146,6 +171,7 @@ public class OffDqnOrchestrator extends Orchestrator {
                 .collect(Collectors.toList());
 
         int deviceGeneratedTheTask = pickRandom(vmDevices);
+        OffState nextState = new OffState();
 
         for (Vm vm : task.getEdgeDevice().getVmList()) {
             if (vm != null) {
@@ -175,11 +201,16 @@ public class OffDqnOrchestrator extends Orchestrator {
                 computedReward = executeLocalAlgorithm(deviceGeneratedTheTask, task, offAction);
                 break;
             default:
-                computedReward = executeLocalAlgorithm(deviceGeneratedTheTask, task, offAction);
+                computedReward = offloadedAlgorithm(deviceGeneratedTheTask, task, offAction);
                 break;
         }
 
+        nextState = buildState(task, deviceGeneratedTheTask);
         totalReward += computedReward;
+        //Add current state, action, reward, next state, and terminal flag to the replay buffer
+        //agent.getReplayBuffer().addLast(new OffExperienceReplay(theCurrentState, action, computedReward, nextState, true));
+        replayBuffer.addLast(new OffExperienceReplay(theCurrentState, action, computedReward, nextState, true));
+
 
 //
 //
@@ -268,14 +299,26 @@ public class OffDqnOrchestrator extends Orchestrator {
 //        return vmId;
 
         taskIndex++;
-        return 1;
+        System.out.println(taskIndex);
+        if (taskIndex == 10) {
+            ReplayBufferToFile instance = new ReplayBufferToFile();
+            instance.saveReplayBufferToFile("C:\\Users\\PC\\Desktop\\MyPfeFolder\\replayBuffer.dat", replayBuffer);
+        }
+        return deviceGeneratedTheTask;
     }
 
-    private int learn() {
-        agent.trainNetwork();
-        int bestAction = agent.chooseBestAction(theCurrentState);
+    public int learn(String[] architecture, Task task) {
 
-        return -1;
+        System.out.println("Rachid Bnekitou");
+        System.out.println(this.replayBuffer);
+        //agent.trainNetwork(this.replayBuffer);
+
+        int bestAction = agent.chooseBestAction(theCurrentState);
+        //System.out.println(bestAction);
+        //int vmId = historyMap.get(new OffStateAction(theCurrentState, bestAction));
+        this.edgeAvailableStorage = this.edgeStorage;
+
+        return 1;
     }
 
     private int getDefaultVmIdForTask(Task task) {
@@ -363,17 +406,5 @@ public class OffDqnOrchestrator extends Orchestrator {
     @Override
     public void resultsReturned(Task task) {
 
-    }
-
-    private double executeLocalAlgorithm(int deviceSelectedVm, Task task, OffAction action) {
-        Vm selectedVm = vmList.get(deviceSelectedVm);
-        double percent = selectedVm.getCpuPercentUtilization() + (task.getLength() / selectedVm.getTotalMipsCapacity());
-        updatedCpuRate = percent * selectedVm.getTotalMipsCapacity();
-        historyMap.put(deviceSelectedVm, new OffStateAction(theCurrentState, action));
-
-        return 0.5;
-    }
-
-    private void offloadedAlgorithm(int selectedVm) {
     }
 }
