@@ -4,10 +4,12 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class OffState {
+public class OffState implements Serializable {
     private double length;
     private double maxLatency;
     private double requestSize;
@@ -18,17 +20,10 @@ public class OffState {
     private int vmId;
 
     public double[] toArray() {
-
-        double[] arr = new double[8];
-        arr[0] = length;
-        arr[1] = maxLatency;
-        arr[2] = requestSize;
-        arr[3] = this.localComputationRate;
-        arr[4] = this.edgeComputationRate;
-        arr[5] = this.remoteComputationRate;
-        arr[6] = this.edgeAvailableStorage * 1.0;
-        arr[7] = (double) this.vmId;
-        return arr;
+        return new double[]{
+                length, maxLatency, requestSize,
+                localComputationRate, edgeComputationRate,
+                remoteComputationRate, edgeAvailableStorage * 1.0, vmId * 1.0
+        };
     }
-
 }

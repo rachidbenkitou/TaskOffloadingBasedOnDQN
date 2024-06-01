@@ -185,7 +185,8 @@ public class OffDqnOrchestrator extends Orchestrator {
         theCurrentState = buildState(task, deviceGeneratedTheTask);
         // Choose action
         // This function returns two values 0 or 1. 0 means task will be executed locally, and 1 means that the task will be offloaded.
-        int action = agent.chooseAction(theCurrentState, taskIndex);
+        int action =1;
+//        int action = agent.chooseAction(theCurrentState, taskIndex);
         OffAction offAction = null;
         if (action == 0) {
             offAction = OffAction.LOCAL_EXECUTION;
@@ -313,7 +314,8 @@ public class OffDqnOrchestrator extends Orchestrator {
         System.out.println(this.replayBuffer);
         //agent.trainNetwork(this.replayBuffer);
 
-        int bestAction = agent.chooseBestAction(theCurrentState);
+        int bestAction = 1;
+//        int bestAction = agent.chooseBestAction(theCurrentState);
         //System.out.println(bestAction);
         //int vmId = historyMap.get(new OffStateAction(theCurrentState, bestAction));
         this.edgeAvailableStorage = this.edgeStorage;
