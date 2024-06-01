@@ -1,11 +1,13 @@
-package com.usms.offloading.dqnoffloading;
+package com.usms.offloading.offdqn;
 
 import com.usms.offloading.offdqn.OffState;
+import lombok.Builder;
 import lombok.Data;
 
 import java.io.Serializable;
 
 @Data
+@Builder
 public class OffExperienceReplay implements Serializable {
     private OffState currentState;
     private int action;
